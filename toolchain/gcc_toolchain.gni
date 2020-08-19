@@ -61,6 +61,7 @@ if (enable_resource_allowlist_generation) {
 #  - cc
 #  - cxx
 #  - ld
+#  - rc (mingw only)
 #
 # Optional parameters that control the tools:
 #
@@ -113,7 +114,9 @@ template("gcc_toolchain") {
     assert(defined(invoker.cc), "gcc_toolchain() must specify a \"cc\" value")
     assert(defined(invoker.cxx), "gcc_toolchain() must specify a \"cxx\" value")
     assert(defined(invoker.ld), "gcc_toolchain() must specify a \"ld\" value")
-
+    if(is_mingw){
+      assert(defined(invoker.rc), "gcc_toolchain() must specify a \"rc\" value")
+    }
     # This define changes when the toolchain changes, forcing a rebuild.
     # Nothing should ever use this define.
     if (defined(invoker.rebuild_define)) {
@@ -283,21 +286,27 @@ template("gcc_toolchain") {
     asm = asm_prefix + invoker.cc
     ar = invoker.ar
     ld = link_prefix + invoker.ld
-    if (defined(invoker.readelf)) {
-      readelf = invoker.readelf
-    } else {
-      readelf = "readelf"
+    if(!is_mingw){
+      if (defined(invoker.readelf)) {
+        readelf = invoker.readelf
+      } else {
+        readelf = "readelf"
+      }
+      if (defined(invoker.nm)) {
+        nm = invoker.nm
+      } else {
+        nm = "nm"
+      }
     }
-    if (defined(invoker.nm)) {
-      nm = invoker.nm
-    } else {
-      nm = "nm"
+    else {
+      rc = invoker.rc
     }
     if (defined(invoker.dwp)) {
       dwp_switch = " --dwp=\"${invoker.dwp}\""
     } else {
       dwp_switch = ""
     }
+
 
     if (defined(invoker.shlib_extension)) {
       default_shlib_extension = invoker.shlib_extension
@@ -382,6 +391,16 @@ template("gcc_toolchain") {
       outputs = [ "$object_subdir/{{source_name_part}}.o" ]
     }
 
+    if(is_mingw){
+      tool("rc") {
+        depfile = "{{output}}.d"
+        command = "$rc -i {{source}} -o {{output}}"
+        depsformat = "gcc"
+        description = "RC {{output}}"
+        outputs = [ "$object_subdir/{{source_name_part}}.o" ]
+      }
+    }
+
     tool("asm") {
       # For GCC we can just use the C compiler to compile assembly.
       depfile = "{{output}}.d"
@@ -459,12 +478,38 @@ template("gcc_toolchain") {
         map_switch = " --map-file \"$map_file\""
       }
 
-      assert(defined(readelf), "to solink you must have a readelf")
-      assert(defined(nm), "to solink you must have an nm")
       strip_switch = ""
       if (defined(invoker.strip)) {
         strip_switch = "--strip=${invoker.strip} "
       }
+
+      mingw_flags = ""
+      soname_flags = "-Wl,-soname=\"$soname\""
+      if(is_mingw){
+        # Have MinGW linker generate a .def file and a .a import library
+        mingw_flags = ""
+        if(!is_clang){
+          mingw_flags += " -Wl,--dll "
+        }
+        mingw_flags += " -Wl,--output-def=\"$sofile\".def -Wl,--out-implib=\"$sofile\".a "
+        readelf = ""
+        if (defined(invoker.readelf)) {
+          readelf = "${invoker.readelf} "
+        }
+        nm = ""
+        if (defined(invoker.nm)) {
+          readelf = "${invoker.nm} "
+        }
+        if(is_clang) {
+          # Clang on Windows does not support the -soname flag.
+          soname_flags = ""
+        }
+      } else {
+        assert(defined(readelf), "to solink you must have a readelf")
+        assert(defined(nm), "to solink you must have an nm")
+      }
+
+      link_command = "$ld -shared ${soname_flags} ${mingw_flags} {{ldflags}}${extra_ldflags} -o \"$unstripped_sofile\" @\"$rspfile\""
 
       # This needs a Python script to avoid using a complex shell command
       # requiring sh control structures, pipelines, and POSIX utilities.

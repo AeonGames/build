@@ -11,6 +11,7 @@ import("//build/toolchain/cc_wrapper.gni")
 import("//build/toolchain/goma.gni")
 import("//build/toolchain/rbe.gni")
 import("//build/toolchain/toolchain.gni")
+import("//build/toolchain/gcc_toolchain.gni")
 
 # Should only be running on Windows.
 assert(is_win)
@@ -52,13 +53,15 @@ if (current_toolchain == default_toolchain) {
   } else {
     configuration_name = "Release"
   }
-  exec_script("../../vs_toolchain.py",
-              [
-                "copy_dlls",
-                rebase_path(root_build_dir),
-                configuration_name,
-                target_cpu,
-              ])
+  if(!is_mingw){
+    exec_script("../../vs_toolchain.py",
+                [
+                  "copy_dlls",
+                  rebase_path(root_build_dir),
+                  configuration_name,
+                  target_cpu,
+                ])
+  }
 }
 
 if (host_os == "win") {
@@ -623,4 +626,27 @@ if (target_os == "winuwp") {
       is_clang = false
     }
   }
+}
+
+template("mingw_toolchain") {
+  gcc_toolchain("mingw_" + target_name) {
+    forward_variables_from(invoker, "*")
+    cc = getenv("CC")
+    cxx = getenv("CXX")
+    ar = getenv("AR")
+    ld = cxx
+    rc = "windres"
+    strip = "strip"
+    executable_extension = ".exe"
+    toolchain_args = {
+      current_cpu = target_name
+      current_os = "win"
+    }
+  }
+}
+
+mingw_toolchain("x64") {
+}
+
+mingw_toolchain("x86") {
 }

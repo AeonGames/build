@@ -18,12 +18,13 @@ import sys
 
 import wrapper_utils
 
-
 def CollectSONAME(args):
   """Replaces: readelf -d $sofile | grep SONAME"""
   # TODO(crbug.com/1259067): Come up with a way to get this info without having
   # to bundle readelf in the toolchain package.
   toc = ''
+  if ("GCC" in sys.version and sys.platform=='win32'): # Mingw's readelf doesn't work on PE files
+    return 0, toc
   readelf = subprocess.Popen(wrapper_utils.CommandToRun(
       [args.readelf, '-d', args.sofile]),
                              stdout=subprocess.PIPE,
@@ -38,6 +39,10 @@ def CollectSONAME(args):
 def CollectDynSym(args):
   """Replaces: nm --format=posix -g -D -p $sofile | cut -f1-2 -d' '"""
   toc = ''
+
+  if ("GCC" in sys.version and sys.platform=='win32'): # Mingw's nm doesn't work on PE/COFF files
+    return 0, toc
+
   nm = subprocess.Popen(wrapper_utils.CommandToRun(
       [args.nm, '--format=posix', '-g', '-D', '-p', args.sofile]),
                         stdout=subprocess.PIPE,
@@ -103,6 +108,9 @@ def main():
                       help='The strip binary to run',
                       metavar='PATH')
   parser.add_argument('--dwp', help='The dwp binary to run', metavar='PATH')
+  parser.add_argument('--objcopy',
+                      help='The objcopy binary to run',
+                      metavar='PATH')
   parser.add_argument('--sofile',
                       required=True,
                       help='Shared object file produced by linking command',
@@ -205,7 +213,6 @@ def main():
       return dwp_result
 
   return result
-
 
 if __name__ == "__main__":
   sys.exit(main())

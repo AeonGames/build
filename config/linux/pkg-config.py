@@ -47,7 +47,6 @@ from optparse import OptionParser
 #
 # --full-path-libs causes lib names to include their full path.
 
-
 def SetConfigPath(options):
   """Set the PKG_CONFIG_LIBDIR environment variable.
 
@@ -112,7 +111,6 @@ def RewritePath(path, strip_prefix, sysroot):
 
 flag_regex = re.compile("(-.)(.+)")
 
-
 def FlagReplace(matchobj):
   if matchobj.group(1) == '-I':
     return matchobj.group(1) + subprocess.check_output(
@@ -124,14 +122,12 @@ def FlagReplace(matchobj):
     return matchobj.group(1) + matchobj.group(2) + '.lib'
   return matchobj.group(0)
 
-
 def ConvertGCCToMSVC(flags):
   """Rewrites GCC flags into MSVC flags."""
   # need a better way to determine mingw vs msvc build
   if 'win32' not in sys.platform or "GCC" in sys.version:
     return flags
   return [flag_regex.sub(FlagReplace, flag) for flag in flags]
-
 
 def main():
   # If this is run on non-Linux platforms, just return nothing and indicate

@@ -119,7 +119,7 @@ template("pkg_config") {
     cflags = pkgresult[1]
 
     foreach(include, pkgresult[0]) {
-      if (use_sysroot) {
+      if (use_sysroot && !is_mingw) {
         # We want the system include paths to use -isystem instead of -I to
         # suppress warnings in those headers.
         include_relativized = rebase_path(include, root_build_dir)
