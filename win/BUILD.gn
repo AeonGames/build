@@ -16,7 +16,7 @@ windows_manifest("default_exe_manifest") {
   ]
 }
 
-if (is_win) {
+if (is_win && !is_mingw) {
   assert(host_os != "mac" || target_cpu != "x86",
          "Windows cross-builds from Mac must be 64-bit.")
 
@@ -92,7 +92,7 @@ if (is_win) {
 
   group("runtime_libs") {
     data = []
-    if (is_component_build) {
+    if (is_component_build && !is_mingw) {
       # Copy the VS runtime DLLs into the isolate so that they don't have to be
       # preinstalled on the target machine. The debug runtimes have a "d" at
       # the end.
