@@ -85,12 +85,14 @@ if (is_win) {
       foreach(i, rebase_path(invoker.sources, root_build_dir)) {
         manifests += [ "/manifestinput:" + i ]
       }
-      ldflags = [
-                  "/manifest:embed",
+      if(!is_mingw){
+        ldflags = [
+                    "/manifest:embed",
 
-                  # We handle UAC by adding explicit .manifest files instead.
-                  "/manifestuac:no",
-                ] + manifests
+                    # We handle UAC by adding explicit .manifest files instead.
+                    "/manifestuac:no",
+                  ] + manifests
+      }
     }
 
     # This source set only exists to add a dep on the invoker's deps and to

@@ -47,7 +47,6 @@ from optparse import OptionParser
 #
 # --full-path-libs causes lib names to include their full path.
 
-
 def SetConfigPath(options):
   """Set the PKG_CONFIG_LIBDIR environment variable.
 
@@ -112,7 +111,6 @@ def RewritePath(path, strip_prefix, sysroot):
 
 flag_regex = re.compile("(-.)(.+)")
 
-
 def FlagReplace(matchobj):
   if matchobj.group(1) == '-I':
      return matchobj.group(1) + subprocess.check_output([u'cygpath',u'-w',matchobj.group(2)]).strip().decode("utf-8")
@@ -122,14 +120,12 @@ def FlagReplace(matchobj):
      return matchobj.group(1) + matchobj.group(2) + '.lib'
   return matchobj.group(0)
 
-
 def ConvertGCCToMSVC(flags):
   """Rewrites GCC flags into MSVC flags."""
   # need a better way to determine mingw vs msvc build
   if 'win32' not in sys.platform or "GCC" in sys.version:
     return flags
   return [ flag_regex.sub(FlagReplace,flag) for flag in flags]
-
 
 def main():
   # If this is run on non-Linux platforms, just return nothing and indicate
@@ -148,14 +144,14 @@ def main():
   parser.add_option('-a', action='store', dest='arch', type='string')
   parser.add_option('--system_libdir', action='store', dest='system_libdir',
                     type='string', default='lib')
+  parser.add_option('--pkg_config_libdir', action='store', dest='pkg_config_libdir',
+                    type='string')
   parser.add_option('--atleast-version', action='store',
                     dest='atleast_version', type='string')
   parser.add_option('--libdir', action='store_true', dest='libdir')
   parser.add_option('--dridriverdir', action='store_true', dest='dridriverdir')
   parser.add_option('--version-as-components', action='store_true',
                     dest='version_as_components')
-  parser.add_option('--pkg_config_libdir', action='store', dest='pkg_config_libdir',
-                    type='string')
   parser.add_option('--full-path-libs', action='store_true', dest='full_path_libs')
   (options, args) = parser.parse_args()
 

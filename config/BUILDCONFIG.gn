@@ -130,6 +130,9 @@ declare_args() {
   # separate flags.
   is_official_build = false
 
+  # Set to true when compiling with the MinGW GCC compiler on the MSYS2 environment.
+  is_mingw = getenv("MSYSTEM") != "" && getenv("MSYSTEM") != "MSYS"
+
   # Set to true when compiling with the Clang compiler.
   is_clang = (current_os != "linux" ||
              (current_cpu != "s390x" && current_cpu != "s390" &&
@@ -200,13 +203,17 @@ if (host_toolchain == "") {
     # configurations we support this will always work and it saves build steps.
     # Windows ARM64 targets require an x64 host for cross build.
     if (target_cpu == "x86" || target_cpu == "x64") {
-      if (is_clang) {
+      if (is_clang && !is_mingw) {
         host_toolchain = "//build/toolchain/win:win_clang_$target_cpu"
+      } else if (is_mingw) {
+        host_toolchain = "//build/toolchain/win:mingw_$target_cpu"
       } else {
         host_toolchain = "//build/toolchain/win:$target_cpu"
       }
-    } else if (is_clang) {
+    } else if (is_clang && !is_mingw) {
       host_toolchain = "//build/toolchain/win:win_clang_$host_cpu"
+    } else if (is_mingw) {
+      host_toolchain = "//build/toolchain/win:mingw_$host_cpu"
     } else {
       host_toolchain = "//build/toolchain/win:$host_cpu"
     }
@@ -241,8 +248,10 @@ if (target_os == "android") {
 } else if (target_os == "win") {
   # On Windows, we use the same toolchain for host and target by default.
   # Beware, win cross builds have some caveats, see docs/win_cross.md
-  if (is_clang) {
+  if (is_clang && !is_mingw) {
     _default_toolchain = "//build/toolchain/win:win_clang_$target_cpu"
+  } else if (is_mingw) {
+    _default_toolchain = "//build/toolchain/win:mingw_$target_cpu"
   } else {
     _default_toolchain = "//build/toolchain/win:$target_cpu"
   }
