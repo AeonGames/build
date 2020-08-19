@@ -105,11 +105,29 @@ def RewritePath(path, strip_prefix, sysroot):
     return path
 
 
+flag_regex = re.compile("(-.)(.+)")
+
+def FlagReplace(matchobj):
+  if matchobj.group(1) == '-I':
+     return matchobj.group(1) + subprocess.check_output([u'cygpath',u'-w',matchobj.group(2)]).strip().decode("utf-8")
+  if matchobj.group(1) == '-L':
+     return matchobj.group(1) + subprocess.check_output([u'cygpath',u'-w',matchobj.group(2)]).strip().decode("utf-8")
+  if matchobj.group(1) == '-l':
+     return matchobj.group(1) + matchobj.group(2) + '.lib'
+  return matchobj.group(0)
+
+def ConvertGCCToMSVC(flags):
+  """Rewrites GCC flags into MSVC flags."""
+  if 'win32' not in sys.platform:
+    return flags
+  return [ flag_regex.sub(FlagReplace,flag) for flag in flags]
+
+
 def main():
   # If this is run on non-Linux platforms, just return nothing and indicate
   # success. This allows us to "kind of emulate" a Linux build from other
   # platforms.
-  if "linux" not in sys.platform:
+  if "linux" not in sys.platform and 'win32' not in sys.platform:
     print("[[],[],[],[],[]]")
     return 0
 
@@ -122,6 +140,8 @@ def main():
   parser.add_option('-a', action='store', dest='arch', type='string')
   parser.add_option('--system_libdir', action='store', dest='system_libdir',
                     type='string', default='lib')
+  parser.add_option('--pkg_config_libdir', action='store', dest='pkg_config_libdir',
+                    type='string')
   parser.add_option('--atleast-version', action='store',
                     dest='atleast_version', type='string')
   parser.add_option('--libdir', action='store_true', dest='libdir')
@@ -143,6 +163,10 @@ def main():
     prefix = GetPkgConfigPrefixToStrip(options, args)
   else:
     prefix = ''
+
+  # Override PKG_CONFIG_LIBDIR
+  if options.pkg_config_libdir:
+    os.environ['PKG_CONFIG_LIBDIR'] = options.pkg_config_libdir
 
   if options.atleast_version:
     # When asking for the return value, just run pkg-config and print the return
@@ -203,7 +227,7 @@ def main():
   # For now just split on spaces to get the args out. This will break if
   # pkgconfig returns quoted things with spaces in them, but that doesn't seem
   # to happen in practice.
-  all_flags = flag_string.strip().split(' ')
+  all_flags = ConvertGCCToMSVC(flag_string.strip().split(' '))
 
 
   sysroot = options.sysroot
@@ -220,7 +244,10 @@ def main():
       continue;
 
     if flag[:2] == '-l':
-      libs.append(RewritePath(flag[2:], prefix, sysroot))
+      library = RewritePath(flag[2:], prefix, sysroot)
+      # Skip math library on MSVC
+      if library != 'm.lib':
+        libs.append(library)
     elif flag[:2] == '-L':
       lib_dirs.append(RewritePath(flag[2:], prefix, sysroot))
     elif flag[:2] == '-I':

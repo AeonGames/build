@@ -45,6 +45,9 @@ declare_args() {
   # in similar fashion by setting the `system_libdir` variable in the build's
   # args.gn file to 'lib' or 'lib64' as appropriate for the target architecture.
   system_libdir = "lib"
+
+  # Allow directly overriding the PKG_CONFIG_LIBDIR enviroment variable
+  pkg_config_libdir = ""
 }
 
 pkg_config_script = "//build/config/linux/pkg-config.py"
@@ -85,6 +88,17 @@ if (host_pkg_config != "") {
   ]
 } else {
   host_pkg_config_args = pkg_config_args
+}
+
+if (pkg_config_libdir != "") {
+  pkg_config_args += [
+    "--pkg_config_libdir",
+    pkg_config_libdir,
+  ]
+  host_pkg_config_args += [
+    "--pkg_config_libdir",
+    pkg_config_libdir,
+  ]
 }
 
 template("pkg_config") {
