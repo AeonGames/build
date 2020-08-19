@@ -122,13 +122,13 @@ config("debug") {
     defines += [ "DYNAMIC_ANNOTATIONS_PREFIX=NACL_" ]
   }
 
-  if (is_win) {
+  if (is_win && !is_mingw) {
     if (!enable_iterator_debugging && !use_custom_libcxx) {
       # Iterator debugging is enabled by default by the compiler on debug
       # builds, and we have to tell it to turn it off.
       defines += [ "_HAS_ITERATOR_DEBUGGING=0" ]
     }
-  } else if ((is_linux || is_chromeos) && current_cpu == "x64" &&
+  } else if ((is_linux || is_chromeos || is_mingw) && current_cpu == "x64" &&
              enable_iterator_debugging) {
     # Enable libstdc++ debugging facilities to help catch problems early, see
     # http://crbug.com/65151 .
@@ -163,7 +163,7 @@ config("release") {
 
 # This config defines the default libraries applied to all targets.
 config("default_libs") {
-  if (is_win) {
+  if (is_win && !is_mingw) {
     # TODO(brettw) this list of defaults should probably be smaller, and
     # instead the targets that use the less common ones (e.g. wininet or
     # winspool) should include those explicitly.
@@ -289,8 +289,13 @@ group("shared_library_deps") {
 
 # Windows linker setup for EXEs and DLLs.
 if (is_win) {
-  _windows_linker_configs = [
-    "//build/config/win:sdk_link",
+  _windows_linker_configs = []
+  if(!is_mingw){
+    _windows_linker_configs += [
+      "//build/config/win:sdk_link",
+    ]
+  }
+  _windows_linker_configs += [
     "//build/config/win:common_linker_setup",
   ]
 }

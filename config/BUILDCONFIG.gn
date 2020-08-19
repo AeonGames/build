@@ -130,8 +130,12 @@ declare_args() {
   # separate flags.
   is_official_build = false
 
+  # Set to true when compiling with the MinGW GCC compiler on the MSYS2 environment.
+  is_mingw = getenv("MSYSTEM") == "MINGW64" || getenv("MSYSTEM") == "MINGW32"
+
   # Set to true when compiling with the Clang compiler.
   is_clang = current_os != "linux" ||
+            !(getenv("MSYSTEM") == "MINGW64" || getenv("MSYSTEM") == "MINGW32") ||
              (current_cpu != "s390x" && current_cpu != "s390" &&
               current_cpu != "ppc64" && current_cpu != "ppc" &&
               current_cpu != "mips" && current_cpu != "mips64" &&
@@ -201,11 +205,15 @@ if (host_toolchain == "") {
     if (target_cpu == "x86" || target_cpu == "x64") {
       if (is_clang) {
         host_toolchain = "//build/toolchain/win:win_clang_$target_cpu"
+      } else if (is_mingw) {
+        host_toolchain = "//build/toolchain/win:mingw_$target_cpu"
       } else {
         host_toolchain = "//build/toolchain/win:$target_cpu"
       }
     } else if (is_clang) {
       host_toolchain = "//build/toolchain/win:win_clang_$host_cpu"
+    } else if (is_mingw) {
+      host_toolchain = "//build/toolchain/win:mingw_$host_cpu"
     } else {
       host_toolchain = "//build/toolchain/win:$host_cpu"
     }
@@ -242,6 +250,8 @@ if (target_os == "android") {
   # Beware, win cross builds have some caveats, see docs/win_cross.md
   if (is_clang) {
     _default_toolchain = "//build/toolchain/win:win_clang_$target_cpu"
+  } else if (is_mingw) {
+    _default_toolchain = "//build/toolchain/win:mingw_$target_cpu"
   } else {
     _default_toolchain = "//build/toolchain/win:$target_cpu"
   }
