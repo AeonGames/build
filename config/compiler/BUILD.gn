@@ -262,7 +262,7 @@ config("compiler") {
 
   # In general, Windows is totally different, but all the other builds share
   # some common GCC configuration.
-  if (!is_win) {
+  if (!is_win || is_mingw) {
     # Common POSIX compiler flags setup.
     # --------------------------------
     cflags += [ "-fno-strict-aliasing" ]  # See http://crbug.com/32204
@@ -276,7 +276,7 @@ config("compiler") {
       } else {
         cflags += [ "-fstack-protector" ]
       }
-    } else if ((is_posix && !is_chromeos && !is_nacl) || is_fuchsia) {
+    } else if ((is_posix && !is_chromeos && !is_nacl) || is_fuchsia || is_mingw) {
       # TODO(phajdan.jr): Use -fstack-protector-strong when our gcc supports it.
       # See also https://crbug.com/533294
       cflags += [ "--param=ssp-buffer-size=4" ]
@@ -287,6 +287,12 @@ config("compiler") {
       } else if (current_os != "aix") {
         # Not available on aix.
         cflags += [ "-fstack-protector" ]
+        if(is_mingw) {
+          # In MingW's GCC -fstack-protector
+          # needs to be passed to the linker as well
+          # for it to link against the ssp library
+          ldflags += [ "-fstack-protector" ]
+        }
       }
     }
 
@@ -315,7 +321,7 @@ config("compiler") {
 
   # Non-Mac Posix and Fuchsia compiler flags setup.
   # -----------------------------------
-  if ((is_posix && !is_apple) || is_fuchsia) {
+  if ((is_posix && !is_apple) || is_fuchsia || is_mingw) {
     if (enable_profiling) {
       if (!is_debug) {
         cflags += [ "-g" ]
@@ -465,7 +471,7 @@ config("compiler") {
     # TODO(thakis): Make the driver pass --color-diagnostics to the linker
     # if -fcolor-diagnostics is passed to it, and pass -fcolor-diagnostics
     # in ldflags instead.
-    if (is_win) {
+    if (is_win && !is_mingw) {
       # On Windows, we call the linker directly, instead of calling it through
       # the driver.
       ldflags += [ "--color-diagnostics" ]
@@ -512,7 +518,7 @@ config("compiler") {
 
   # C11/C++11 compiler flags setup.
   # ---------------------------
-  if (is_linux || is_chromeos || is_android || (is_nacl && is_clang) ||
+  if (is_linux || is_mingw || is_chromeos || is_android || (is_nacl && is_clang) ||
       current_os == "aix") {
     if (target_os == "android") {
       cxx11_override = use_cxx11_on_android
@@ -614,7 +620,7 @@ config("compiler") {
       lto_opt_level = 0
     }
 
-    if (is_win) {
+    if (is_win && !is_mingw) {
       # This is a straight translation of the non-Windows flags below,
       # except we do not use the ThinLTO cache, which leaks temporary
       # files on Windows (https://crbug.com/871962).
@@ -684,7 +690,7 @@ config("compiler") {
     # built with ThinLTO (see https://crbug.com/767901) as well as the GVR shim.
     if (!is_android) {
       cflags += [ "-fwhole-program-vtables" ]
-      if (!is_win) {
+      if (!is_win || is_mingw) {
         ldflags += [ "-fwhole-program-vtables" ]
       }
     }
@@ -701,12 +707,12 @@ config("compiler") {
 
   if (compiler_timing) {
     if (is_clang && !is_nacl) {
-      if (is_win) {
+      if (is_win && !is_mingw) {
         cflags += [ "/clang:-ftime-trace" ]
       } else {
         cflags += [ "-ftime-trace" ]
       }
-    } else if (is_win) {
+    } else if (is_win && !is_mingw) {
       cflags += [
         # "Documented" here:
         # http://aras-p.info/blog/2017/10/23/Best-unknown-MSVC-flag-d2cgsummary/
@@ -748,7 +754,7 @@ config("compiler") {
   # Assign any flags set for the C compiler to asmflags so that they are sent
   # to the assembler. The Windows assembler takes different types of flags
   # so only do so for posix platforms.
-  if (is_posix || is_fuchsia) {
+  if (is_posix || is_fuchsia || is_mingw) {
     asmflags += cflags
     asmflags += cflags_c
   }
@@ -764,7 +770,7 @@ config("compiler_cpu_abi") {
   ldflags = []
   defines = []
 
-  if ((is_posix && !is_apple) || is_fuchsia) {
+  if ((is_posix && !is_apple) || is_fuchsia || is_mingw) {
     # CPU architecture. We may or may not be doing a cross compile now, so for
     # simplicity we always explicitly set the architecture.
     if (current_cpu == "x64") {
@@ -1121,7 +1127,7 @@ config("compiler_deterministic") {
   # Eliminate build metadata (__DATE__, __TIME__ and __TIMESTAMP__) for
   # deterministic build.  See https://crbug.com/314403
   if (!is_official_build) {
-    if (is_win && !is_clang) {
+    if (is_win && !is_clang && !is_mingw) {
       cflags += [
         "/wd4117",  # Trying to define or undefine a predefined macro.
         "/D__DATE__=",
@@ -1282,7 +1288,7 @@ config("default_warnings") {
   cflags_cc = []
   ldflags = []
 
-  if (is_win) {
+  if (is_win && !is_mingw) {
     if (treat_warnings_as_errors) {
       cflags += [ "/WX" ]
     }
@@ -1492,16 +1498,32 @@ config("default_warnings") {
       # files.
       cflags += [ "-Wno-packed-not-aligned" ]
     }
+
+    if (is_mingw) {
+      cflags += [
+        "-Wno-attributes",           # "__decspec(dllimport) inline"
+        "-Wno-format",               # PRIu64 llu support on MinGW
+        "-Wno-unused-but-set-variable",
+        "-Wno-stringop-overflow",    # False positive overflow error on gcc 10
+
+      ]
+      cflags_cc += [
+        "-Wno-subobject-linkage",    # Tests having code in header files
+      ]
+    }
   }
 
   # Common Clang and GCC warning setup.
-  if (!is_win || is_clang) {
+  if (!is_win || is_clang || is_mingw) {
     cflags += [
       # Disables.
       "-Wno-missing-field-initializers",  # "struct foo f = {0};"
       "-Wno-unused-parameter",  # Unused function parameters.
       "-Wno-invalid-offsetof", # Use of "conditionally-supported" offsetof in c++17
     ]
+    if(is_clang){
+      cflags += ["-Wno-range-loop-construct"] # Use of "conditionally-supported" offsetof in c++17
+    }
   }
 
   if (is_clang) {
@@ -1586,7 +1608,7 @@ config("default_warnings") {
 # part of Chromium.
 
 config("chromium_code") {
-  if (is_win) {
+  if (is_win && !is_mingw) {
     cflags = [ "/W4" ]  # Warning level 4.
 
     if (is_clang) {
@@ -1678,7 +1700,7 @@ config("no_chromium_code") {
   cflags_cc = []
   defines = []
 
-  if (is_win) {
+  if (is_win && !is_mingw) {
     cflags += [
       "/W3",  # Warning level 3.
       "/wd4800",  # Disable warning when forcing value to bool.
@@ -1737,7 +1759,7 @@ config("noshadowing") {
 # Allows turning Run-Time Type Identification on or off.
 
 config("rtti") {
-  if (is_win) {
+  if (is_win && !is_mingw) {
     cflags_cc = [ "/GR" ]
   } else {
     cflags_cc = [ "-frtti" ]
@@ -1747,7 +1769,7 @@ config("rtti") {
 config("no_rtti") {
   # Some sanitizer configs may require RTTI to be left enabled globally
   if (!use_rtti) {
-    if (is_win) {
+    if (is_win && !is_mingw) {
       cflags_cc = [ "/GR-" ]
     } else {
       cflags_cc = [ "-fno-rtti" ]
@@ -1800,7 +1822,7 @@ config("thin_archive") {
 # Note: exceptions are disallowed in Google code.
 
 config("exceptions") {
-  if (is_win) {
+  if (is_win && !is_mingw) {
     # Enables exceptions in the STL.
     if (!use_custom_libcxx) {
       defines = [ "_HAS_EXCEPTIONS=1" ]
@@ -1813,7 +1835,7 @@ config("exceptions") {
 }
 
 config("no_exceptions") {
-  if (is_win) {
+  if (is_win && !is_mingw) {
     # Disables exceptions in the STL.
     # libc++ uses the __has_feature macro to control whether to use exceptions,
     # so defining this macro is unnecessary. Defining _HAS_EXCEPTIONS to 0 also
@@ -1883,7 +1905,7 @@ config("no_shorten_64_warnings") {
     if (is_clang) {
       cflags = [ "-Wno-shorten-64-to-32" ]
     } else {
-      if (is_win) {
+      if (is_win && !is_mingw) {
         # MSVC does not have an explicit warning equivalent to
         # -Wshorten-64-to-32 but 4267 warns for size_t -> int
         # on 64-bit builds, so is the closest.
@@ -1923,21 +1945,22 @@ config("no_incompatible_pointer_warnings") {
 
 # Shared settings for both "optimize" and "optimize_max" configs.
 # IMPORTANT: On Windows "/O1" and "/O2" must go before the common flags.
-if (is_win) {
+if (is_win && !is_mingw) {
   common_optimize_on_cflags = []
   if(is_clang) {
     common_optimize_on_cflags += [
-     "/Ob2",  # Both explicit and auto inlining.
+    "/Ob2",  # Both explicit and auto inlining.
     ]
   } else {
-    common_optimize_on_cflags += [
-      "/Ob3",  # Both explicit and auto inlining.
+  common_optimize_on_cflags += [
+    "/Ob3",  # Both explicit and auto inlining.
     ]
   }
   common_optimize_on_cflags += [
     "/Oy-",  # Disable omitting frame pointers, must be after /O2.
     "/Zc:inline",  # Remove unreferenced COMDAT (faster links).
   ]
+
   if (!is_asan) {
     common_optimize_on_cflags += [
       # Put data in separate COMDATs. This allows the linker
@@ -2040,7 +2063,7 @@ config("default_stack_frames") {
 
 # Default "optimization on" config.
 config("optimize") {
-  if (is_win) {
+  if (is_win && !is_mingw) {
     if (chrome_pgo_phase != 2) {
       # Favor size over speed, /O1 must be before the common flags.
       # /O1 implies /Os and /GF.
@@ -2075,7 +2098,7 @@ config("optimize") {
 
 # Turn off optimizations.
 config("no_optimize") {
-  if (is_win) {
+  if (is_win && !is_mingw) {
     cflags = [
       "/Od",  # Disable optimization.
       "/Ob0",  # Disable all inlining (on by default).
@@ -2127,7 +2150,7 @@ config("optimize_max") {
     configs = [ "//build/config/nacl:irt_optimize" ]
   } else {
     ldflags = common_optimize_on_ldflags
-    if (is_win) {
+    if (is_win && !is_mingw) {
       # Favor speed over size, /O2 must be before the common flags.
       # /O2 implies /Ot, /Oi, and /GF.
       cflags = [ "/O2" ] + common_optimize_on_cflags
@@ -2159,7 +2182,7 @@ config("optimize_speed") {
     configs = [ "//build/config/nacl:irt_optimize" ]
   } else {
     ldflags = common_optimize_on_ldflags
-    if (is_win) {
+    if (is_win && !is_mingw) {
       # Favor speed over size, /O2 must be before the common flags.
       # /O2 implies /Ot, /Oi, and /GF.
       cflags = [ "/O2" ] + common_optimize_on_cflags
@@ -2300,7 +2323,7 @@ config("win_pdbaltpath") {
 
 # Full symbols.
 config("symbols") {
-  if (is_win) {
+  if (is_win && !is_mingw) {
     if (is_clang) {
       cflags = [ "/Z7" ]  # Debug information in the .obj files.
     } else {
@@ -2348,7 +2371,8 @@ config("symbols") {
     # build-directory-independent output. pnacl and nacl-clang do support that
     # flag, so we can use use -g1 for pnacl and nacl-clang compiles.
     # gcc nacl is is_nacl && !is_clang, pnacl and nacl-clang are && is_clang.
-    if (!is_nacl || is_clang) {
+    # mingw cannot handle the size of the debug symbols generated.
+    if (!is_mingw && (!is_nacl || is_clang)) {
       cflags += [ "-g2" ]
     }
 
@@ -2408,7 +2432,7 @@ config("symbols") {
 # This config guarantees to hold symbol for stack trace which are shown to user
 # when crash happens in unittests running on buildbot.
 config("minimal_symbols") {
-  if (is_win) {
+  if (is_win && !is_mingw) {
     # Functions, files, and line tables only.
     cflags = []
     ldflags = [ "/DEBUG" ]
@@ -2461,7 +2485,7 @@ config("minimal_symbols") {
 # told to not generate debug information and the linker then just puts function
 # names in the final debug information.
 config("no_symbols") {
-  if (is_win) {
+  if (is_win && !is_mingw) {
     ldflags = [ "/DEBUG" ]
 
     # All configs using /DEBUG should include this:

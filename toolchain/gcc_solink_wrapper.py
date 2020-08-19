@@ -18,10 +18,11 @@ import sys
 
 import wrapper_utils
 
-
 def CollectSONAME(args):
   """Replaces: readelf -d $sofile | grep SONAME"""
   toc = ''
+  if ("GCC" in sys.version and sys.platform=='win32'): # Mingw's readelf doesn't work on PE files
+    return 0, toc
   readelf = subprocess.Popen(wrapper_utils.CommandToRun(
       [args.readelf, '-d', args.sofile]),
                              stdout=subprocess.PIPE,
@@ -36,6 +37,10 @@ def CollectSONAME(args):
 def CollectDynSym(args):
   """Replaces: nm --format=posix -g -D -p $sofile | cut -f1-2 -d' '"""
   toc = ''
+
+  if ("GCC" in sys.version and sys.platform=='win32'): # Mingw's nm doesn't work on PE/COFF files
+    return 0, toc
+
   nm = subprocess.Popen(wrapper_utils.CommandToRun(
       [args.nm, '--format=posix', '-g', '-D', '-p', args.sofile]),
                         stdout=subprocess.PIPE,
@@ -94,6 +99,9 @@ def main():
                       help='The strip binary to run',
                       metavar='PATH')
   parser.add_argument('--dwp', help='The dwp binary to run', metavar='PATH')
+  parser.add_argument('--objcopy',
+                      help='The objcopy binary to run',
+                      metavar='PATH')
   parser.add_argument('--sofile',
                       required=True,
                       help='Shared object file produced by linking command',
@@ -177,8 +185,18 @@ def main():
 
   # Finally, strip the linked shared object file (if desired).
   if args.strip:
+    if args.objcopy:
+      result = subprocess.call(wrapper_utils.CommandToRun(
+          [args.objcopy, '--only-keep-debug', args.sofile, args.output + '.debug']))
+      if result != 0:
+        return result
     result = subprocess.call(wrapper_utils.CommandToRun(
         [args.strip, '-o', args.output, args.sofile]))
+    if result != 0:
+      return result
+    if args.objcopy:
+      result = subprocess.call(wrapper_utils.CommandToRun(
+          [args.objcopy, '--add-gnu-debuglink', args.output + '.debug',args.output]))
 
   if dwp_proc:
     dwp_result = dwp_proc.wait()
@@ -186,7 +204,6 @@ def main():
       return dwp_result
 
   return result
-
 
 if __name__ == "__main__":
   sys.exit(main())

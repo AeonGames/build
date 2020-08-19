@@ -38,6 +38,9 @@ def main():
   parser.add_argument('--strip',
                       help='The strip binary to run',
                       metavar='PATH')
+  parser.add_argument('--objcopy',
+                      help='The objcopy binary to run',
+                      metavar='PATH')
   parser.add_argument('--unstripped-file',
                       help='Executable file produced by linking command',
                       metavar='FILE')
@@ -74,9 +77,19 @@ def main():
 
   # Finally, strip the linked executable (if desired).
   if args.strip:
+    if args.objcopy:
+      result = subprocess.call(wrapper_utils.CommandToRun(
+          [args.objcopy, '--only-keep-debug', args.unstripped_file, args.output + '.debug']))
+      if result != 0:
+        return result
     result = subprocess.call(CommandToRun([
         args.strip, '-o', args.output, args.unstripped_file
         ]))
+    if result != 0:
+      return result
+    if args.objcopy:
+      result = subprocess.call(wrapper_utils.CommandToRun(
+          [args.objcopy, '--add-gnu-debuglink', args.output + '.debug',args.output]))
 
   if dwp_proc:
     dwp_result = dwp_proc.wait()
