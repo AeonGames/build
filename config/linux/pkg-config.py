@@ -118,7 +118,7 @@ def FlagReplace(matchobj):
 
 def ConvertGCCToMSVC(flags):
   """Rewrites GCC flags into MSVC flags."""
-  if 'win32' not in sys.platform:
+  if 'win32' not in sys.platform or "GCC" in sys.version:
     return flags
   return [ flag_regex.sub(FlagReplace,flag) for flag in flags]
 
