@@ -305,29 +305,31 @@ config("sdk_link") {
     ldflags = [ "/MACHINE:ARM64" ]
   }
 
-  vcvars_toolchain_data = exec_script("../../toolchain/win/setup_toolchain.py",
-                                      [
-                                        visual_studio_path,
-                                        windows_sdk_path,
-                                        visual_studio_runtime_dirs,
-                                        current_os,
-                                        current_cpu,
-                                        "none",
-                                      ],
-                                      "scope")
+  if(!is_mingw){
+    vcvars_toolchain_data = exec_script("../../toolchain/win/setup_toolchain.py",
+                                        [
+                                          visual_studio_path,
+                                          windows_sdk_path,
+                                          visual_studio_runtime_dirs,
+                                          current_os,
+                                          current_cpu,
+                                          "none",
+                                        ],
+                                        "scope")
 
-  vc_lib_path = vcvars_toolchain_data.vc_lib_path
-  if (defined(vcvars_toolchain_data.vc_lib_atlmfc_path)) {
-    vc_lib_atlmfc_path = vcvars_toolchain_data.vc_lib_atlmfc_path
-  }
-  vc_lib_um_path = vcvars_toolchain_data.vc_lib_um_path
+    vc_lib_path = vcvars_toolchain_data.vc_lib_path
+    if (defined(vcvars_toolchain_data.vc_lib_atlmfc_path)) {
+      vc_lib_atlmfc_path = vcvars_toolchain_data.vc_lib_atlmfc_path
+    }
+    vc_lib_um_path = vcvars_toolchain_data.vc_lib_um_path
 
-  lib_dirs = [
-    "$vc_lib_um_path",
-    "$vc_lib_path",
-  ]
-  if (defined(vc_lib_atlmfc_path)) {
-    lib_dirs += [ "$vc_lib_atlmfc_path" ]
+    lib_dirs = [
+      "$vc_lib_um_path",
+      "$vc_lib_path",
+    ]
+    if (defined(vc_lib_atlmfc_path)) {
+      lib_dirs += [ "$vc_lib_atlmfc_path" ]
+    }
   }
 }
 
@@ -622,5 +624,15 @@ config("cygprofile_instrumentation") {
 config("export_all_symbols") {
   if(is_win && is_mingw){
     ldflags = [ "-Wl,--export-all-symbols" ]
+  }
+}
+
+# Workaround a Mingw ld bug where large debug symbol data
+# causes the produced executable to be corrupted
+# https://stackoverflow.com/questions/22261539/ld-exe-crashing-in-mingw
+# this affects mksnapshot and v8 component.
+config("strip_at_link_time") {
+  if(is_win && is_mingw){
+    ldflags = [ "-Wl,--strip" ]
   }
 }

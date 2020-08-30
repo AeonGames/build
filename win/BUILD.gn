@@ -91,7 +91,7 @@ if (is_win && !is_mingw) {
 
   group("runtime_libs") {
     data = []
-    if (is_component_build) {
+    if (is_component_build && !is_mingw) {
       # Copy the VS runtime DLLs into the isolate so that they don't have to be
       # preinstalled on the target machine. The debug runtimes have a "d" at
       # the end.
