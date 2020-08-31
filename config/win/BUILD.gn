@@ -631,8 +631,14 @@ config("export_all_symbols") {
 # causes the produced executable to be corrupted
 # https://stackoverflow.com/questions/22261539/ld-exe-crashing-in-mingw
 # this affects mksnapshot and v8 component.
-config("strip_at_link_time") {
+config("strip_debug_symbols_at_link_time") {
   if(is_win && is_mingw){
-    ldflags = [ "-Wl,--strip" ]
+    ldflags = [ "-Wl,--strip-debug" ]
+  }
+}
+
+config("strip_all_symbols_at_link_time") {
+  if(is_win && is_mingw){
+    ldflags = [ "-Wl,--strip-all" ]
   }
 }
