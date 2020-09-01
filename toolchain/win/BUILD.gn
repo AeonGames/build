@@ -531,7 +531,9 @@ template("mingw_toolchain") {
     cxx = "g++"
     ar = "ar"
     ld = cxx
-    rc = "windres"
+    if(is_mingw){
+      rc = "windres"
+    }
     strip = "strip"
     if(is_debug){
       objcopy = "objcopy"
