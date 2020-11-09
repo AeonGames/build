@@ -41,6 +41,11 @@ from optparse import OptionParser
 # Additionally, you can specify the option --atleast-version. This will skip
 # the normal outputting of a dictionary and instead print true or false,
 # depending on the return value of pkg-config for the given package.
+#
+# --pkg_config_libdir=<path> allows direct override
+# of the PKG_CONFIG_LIBDIR environment library.
+#
+# --full-path-libs causes lib names to include their full path.
 
 
 def SetConfigPath(options):
@@ -105,11 +110,32 @@ def RewritePath(path, strip_prefix, sysroot):
     return path
 
 
+flag_regex = re.compile("(-.)(.+)")
+
+
+def FlagReplace(matchobj):
+  if matchobj.group(1) == '-I':
+     return matchobj.group(1) + subprocess.check_output([u'cygpath',u'-w',matchobj.group(2)]).strip().decode("utf-8")
+  if matchobj.group(1) == '-L':
+     return matchobj.group(1) + subprocess.check_output([u'cygpath',u'-w',matchobj.group(2)]).strip().decode("utf-8")
+  if matchobj.group(1) == '-l':
+     return matchobj.group(1) + matchobj.group(2) + '.lib'
+  return matchobj.group(0)
+
+
+def ConvertGCCToMSVC(flags):
+  """Rewrites GCC flags into MSVC flags."""
+  # need a better way to determine mingw vs msvc build
+  if 'win32' not in sys.platform or "GCC" in sys.version:
+    return flags
+  return [ flag_regex.sub(FlagReplace,flag) for flag in flags]
+
+
 def main():
   # If this is run on non-Linux platforms, just return nothing and indicate
   # success. This allows us to "kind of emulate" a Linux build from other
   # platforms.
-  if "linux" not in sys.platform:
+  if "linux" not in sys.platform and 'win32' not in sys.platform:
     print("[[],[],[],[],[]]")
     return 0
 
@@ -128,6 +154,9 @@ def main():
   parser.add_option('--dridriverdir', action='store_true', dest='dridriverdir')
   parser.add_option('--version-as-components', action='store_true',
                     dest='version_as_components')
+  parser.add_option('--pkg_config_libdir', action='store', dest='pkg_config_libdir',
+                    type='string')
+  parser.add_option('--full-path-libs', action='store_true', dest='full_path_libs')
   (options, args) = parser.parse_args()
 
   # Make a list of regular expressions to strip out.
@@ -143,6 +172,10 @@ def main():
     prefix = GetPkgConfigPrefixToStrip(options, args)
   else:
     prefix = ''
+
+  # Override PKG_CONFIG_LIBDIR
+  if options.pkg_config_libdir:
+    os.environ['PKG_CONFIG_LIBDIR'] = options.pkg_config_libdir
 
   if options.atleast_version:
     # When asking for the return value, just run pkg-config and print the return
@@ -203,7 +236,7 @@ def main():
   # For now just split on spaces to get the args out. This will break if
   # pkgconfig returns quoted things with spaces in them, but that doesn't seem
   # to happen in practice.
-  all_flags = flag_string.strip().split(' ')
+  all_flags = ConvertGCCToMSVC(flag_string.strip().split(' '))
 
 
   sysroot = options.sysroot
@@ -220,7 +253,10 @@ def main():
       continue;
 
     if flag[:2] == '-l':
-      libs.append(RewritePath(flag[2:], prefix, sysroot))
+      library = RewritePath(flag[2:], prefix, sysroot)
+      # Skip math library on MSVC
+      if library != 'm.lib':
+        libs.append(library)
     elif flag[:2] == '-L':
       lib_dirs.append(RewritePath(flag[2:], prefix, sysroot))
     elif flag[:2] == '-I':
@@ -236,6 +272,14 @@ def main():
       pass
     else:
       cflags.append(flag)
+
+  if options.full_path_libs:
+    full_path_libs = []
+    for lib_dir in lib_dirs:
+      for lib in libs:
+        if os.path.isfile(lib_dir+"/"+lib):
+          full_path_libs.append(lib_dir+"/"+lib)
+    libs = full_path_libs
 
   # Output a GN array, the first one is the cflags, the second are the libs. The
   # JSON formatter prints GN compatible lists when everything is a list of

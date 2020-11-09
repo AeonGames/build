@@ -12,7 +12,6 @@ import("//build/config/clang/clang.gni")
 import("//build/config/compiler/compiler.gni")
 import("//build/config/coverage/coverage.gni")
 import("//build/config/dcheck_always_on.gni")
-import("//build/config/gclient_args.gni")
 import("//build/config/host_byteorder.gni")
 import("//build/config/sanitizers/sanitizers.gni")
 import("//build/config/ui.gni")
@@ -1501,6 +1500,7 @@ config("default_warnings") {
       # Disables.
       "-Wno-missing-field-initializers",  # "struct foo f = {0};"
       "-Wno-unused-parameter",  # Unused function parameters.
+      "-Wno-invalid-offsetof", # Use of "conditionally-supported" offsetof in c++17
     ]
   }
 
@@ -1924,8 +1924,17 @@ config("no_incompatible_pointer_warnings") {
 # Shared settings for both "optimize" and "optimize_max" configs.
 # IMPORTANT: On Windows "/O1" and "/O2" must go before the common flags.
 if (is_win) {
-  common_optimize_on_cflags = [
-    "/Ob2",  # Both explicit and auto inlining.
+  common_optimize_on_cflags = []
+  if(is_clang) {
+    common_optimize_on_cflags += [
+     "/Ob2",  # Both explicit and auto inlining.
+    ]
+  } else {
+    common_optimize_on_cflags += [
+      "/Ob3",  # Both explicit and auto inlining.
+    ]
+  }
+  common_optimize_on_cflags += [
     "/Oy-",  # Disable omitting frame pointers, must be after /O2.
     "/Zc:inline",  # Remove unreferenced COMDAT (faster links).
   ]
