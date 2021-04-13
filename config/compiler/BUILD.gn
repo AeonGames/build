@@ -1864,6 +1864,12 @@ config("exceptions") {
   } else {
     cflags_cc = [ "-fexceptions" ]
     cflags_objcc = cflags_cc
+    if (is_mingw && exclude_unwind_tables) {
+      # With exceptions explicitly allowed,
+      # override exclude_unwind_tables or
+      # linking will fail on MinGW
+      cflags_cc += [ "-funwind-tables", "-fasynchronous-unwind-tables" ]
+    }
   }
 }
 
