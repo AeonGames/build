@@ -131,11 +131,11 @@ declare_args() {
   is_official_build = false
 
   # Set to true when compiling with the MinGW GCC compiler on the MSYS2 environment.
-  is_mingw = getenv("MSYSTEM") == "MINGW64" || getenv("MSYSTEM") == "MINGW32"
+  is_mingw = getenv("MSYSTEM") != "" && getenv("MSYSTEM") != "MSYS"
 
   # Set to true when compiling with the Clang compiler.
   is_clang = current_os != "linux" ||
-            !(getenv("MSYSTEM") == "MINGW64" || getenv("MSYSTEM") == "MINGW32") ||
+            !(getenv("MSYSTEM") != "" && getenv("MSYSTEM") != "MSYS") ||
              (current_cpu != "s390x" && current_cpu != "s390" &&
               current_cpu != "ppc64" && current_cpu != "ppc" &&
               current_cpu != "mips" && current_cpu != "mips64" &&
